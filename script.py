@@ -15,16 +15,21 @@ from htmlTemplates import css,bot_template,user_template
 from dotenv import load_dotenv
 load_dotenv()
 
-#This will generate text from the pdfs uploaded and return the text
-def get_pdf_text(pdf_docs):
-    text=""
-    for pdf in pdf_docs:
-        file_name = pdf.name
+#This will generate text from the pdfs, docs uploaded and return the text
+def get_text(docs):
+    text = ""
+    for doc in docs:
+        file_name = doc.name
         text+= "The file name is %s\n"%file_name
-        pdf_reader= PdfReader(pdf)
-        for page in pdf_reader.pages:
-            text+= page.extract_text()
-    return  text
+        if(file_name.endswith('.pdf')):
+            pdf_reader = PdfReader(doc)
+            for page in pdf_reader.pages:
+                text += page.extract_text()
+        if(file_name.endswith('.docs')):
+            docs_reader = Document(doc)
+            for paragraph in docs_reader.paragraphs:
+                text += paragraph.text + "\n"
+    return text
 
 #This will take the text, create the chunks and return those chunks
 def get_text_chunks(text):
@@ -38,15 +43,22 @@ def get_vector_store(text_chunks):
     vector_store = FAISS.from_texts(text_chunks, embedding=embeddings)
     return vector_store
 
-def read_previous_text(raw_text):
-    readFile = open(data_file, 'rb')
-    previous_txt = pickle.load(readFile)
-    readFile.close()
-    return previous_txt
+#This will read the previous text which is in the server
+def read_previous_text(username):
+    data_file = f"data_{username}.obj"
 
-def write_text_data_file(previous_text):
-    writeFile = open(data_file, 'wb')
-    pickle.dump(previous_text, writeFile)
+    try:
+        with open(data_file, 'rb') as readFile:
+            previous_txt = pickle.load(readFile)
+        return previous_txt
+    except FileNotFoundError:
+        return ""
+
+#This will write the updated text into the data files in the server
+def write_text_data_file(username,previous_text):
+    data_file = f"data_{username}.obj"
+    with open(data_file, 'wb') as writeFile:
+        pickle.dump(previous_text, writeFile)
     writeFile.close()
 
 def get_conversational_chain(vector_store):
@@ -71,53 +83,100 @@ def user_input(user_question):
         st.write(user_template.replace("{{MSG}}", user_message.content), unsafe_allow_html=True)
         st.write(bot_template.replace("{{MSG}}", bot_message.content), unsafe_allow_html=True)
 
-
 def main():
+    try:
+        st.set_page_config("DocPlay 💬")
+        st.header("DocPlay 💬")
+        users = fetch_users()
+        emails = []
+        usernames = []
+        passwords = []
     
-    st.set_page_config("Chat with Multiple PDFs")
+        for user in users:
+            emails.append(user['key'])
+            usernames.append(user['username'])
+            passwords.append(user['password'])
+        
+        credentials = {'usernames': {}}
+        for index in range(len(emails)):
+            credentials['usernames'][usernames[index]] = {'name': emails[index], 'password': passwords[index]}
+        
+        Authenticator = stauth.Authenticate(credentials, cookie_name='Streamlit', key='abcdef', cookie_expiry_days=4)
+        email, authentication_status, username = Authenticator.login(':green[Login]', 'main')
 
-    st.write(css, unsafe_allow_html=True)
+        info, info1 = st.columns(2)
 
-    st.header("Chat with Multiple PDF 💬")
-    st.text_input("Ask a Question from the PDF Files", key="widget", on_change=submit)
-    if "user_question" not in st.session_state:
-        st.session_state.user_question = ""
-    user_question = st.session_state.user_question
-    if "conversation" not in st.session_state:
-        st.session_state.conversation = None
-    if "chatHistory" not in st.session_state:
-        st.session_state.chatHistory = None
-    if user_question:
-        user_input(user_question)
-    with st.sidebar:
-        st.title("Settings")
-        st.subheader("Upload your Documents")
-        previous_data = st.checkbox("Previous text")
-        if(previous_data):
-            if st.button("Process"):
-                with st.spinner("Processing"):
-                    previous_txt = read_previous_text("")
-                    print(previous_txt)
-                    previous_txt = "\nThis is the previous text\n" + previous_txt
-                    write_text_data_file(previous_txt)
-                    text_chunks = get_text_chunks(previous_txt)
-                    vector_store = get_vector_store(text_chunks)
-                    st.session_state.conversation = get_conversational_chain(vector_store)
-                    st.success("Done")
-        else:
-            pdf_docs = st.file_uploader("Upload your PDF Files and Click on the Process Button", accept_multiple_files=True)
-            if st.button("Process"):
-                with st.spinner("Processing"):
-                    raw_text = get_pdf_text(pdf_docs)
-                    previous_txt = read_previous_text(raw_text)
-                    previous_txt = ""
-                    previous_txt = raw_text + "\nThis is the previous text\n" + previous_txt
-                    write_text_data_file(previous_txt)
-                    text_chunks = get_text_chunks(previous_txt)
-                    vector_store = get_vector_store(text_chunks)
-                    st.session_state.conversation = get_conversational_chain(vector_store)
-                    st.success("Done")
+        ##check sign up
+        if not authentication_status:
+            sign_up()
 
+        if username:
+            if username in usernames:
+                if authentication_status:
+                    #let user see the app
+                    st.write(css, unsafe_allow_html=True)
+
+                    # st.header("Chat with Multiple PDF 💬")
+                    st.text_input("Ask a Question from the PDF Files", key="widget", on_change=submit)
+                    if "user_question" not in st.session_state:
+                        st.session_state.user_question = ""
+                    user_question = st.session_state.user_question
+                    if "conversation" not in st.session_state:
+                        st.session_state.conversation = None
+                    if "chatHistory" not in st.session_state:
+                        st.session_state.chatHistory = None
+                    if "clear_history_pressed" not in st.session_state:
+                        st.session_state.clear_history_pressed = False
+                    if user_question:
+                        user_input(user_question)
+                    with st.sidebar:
+                        st.title(f'Welcome {username}')
+                        st.subheader("Upload your Documents")
+                        checkbox_container = st.empty()
+                        previous_data = checkbox_container.checkbox("Previous text", disabled = st.session_state.clear_history_pressed)
+
+                        if st.button("Clear History"):
+                            write_text_data_file(username,"")
+                            st.session_state.clear_history_pressed = True
+                        
+                        if previous_data:
+                            if st.button("Process"):
+                                with st.spinner("Processing"):
+                                    previous_txt = read_previous_text(username)
+                                    previous_txt = "\nThis is the previous text\n" + previous_txt
+                                    write_text_data_file(username,previous_txt)
+                                    text_chunks = get_text_chunks(previous_txt)
+                                    vector_store = get_vector_store(text_chunks)
+                                    st.session_state.conversation = get_conversational_chain(vector_store)
+                                    st.success("Done")
+                        else:
+                            pdf_docs = st.file_uploader("Upload your PDF Files and Click on the Process Button", accept_multiple_files=True)
+                            if st.button("Process"):
+                                with st.spinner("Processing"):
+                                    raw_text = get_text(pdf_docs)
+                                    previous_txt = read_previous_text(username)
+                                    previous_txt = raw_text + "\nThis is the previous text\n" + previous_txt
+                                    write_text_data_file(username,previous_txt)
+                                    st.session_state.clear_history_pressed = False
+                                    text_chunks = get_text_chunks(previous_txt)
+                                    vector_store = get_vector_store(text_chunks)
+                                    st.session_state.conversation = get_conversational_chain(vector_store)
+                                    st.success("Done")
+                        Authenticator.logout('Log Out','sidebar')
+
+                elif not authentication_status:
+                    with info:
+                        st.error('Invalid Username and Password')
+                else:
+                    with info:
+                        st.warning('Please enter credentials')
+            else:
+                with info:
+                    st.warning("Username does not exist, Please Sign up")
+
+    
+    except:
+        st.success('Refresh Page')
 
 
 if __name__ == "__main__":
