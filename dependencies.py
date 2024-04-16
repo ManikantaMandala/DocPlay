@@ -4,10 +4,10 @@ import streamlit_authenticator as stauth
 import datetime
 import re
 from deta import Deta
+from dotenv import dotenv_values
+config = dotenv_values(".env")
 
-DETA_KEY = os.getenv('DETA_KEY')
-
-deta = Deta(DETA_KEY)
+deta = Deta(config['DETA_KEY'])
 
 db = deta.Base('StreamlitAuth')
 
