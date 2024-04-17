@@ -2,7 +2,7 @@ import pickle
 from docx import Document
 import streamlit as st
 import streamlit_authenticator as stauth
-from dependencies import sign_up, fetch_users
+from dependencies import sign_up, fetch_users, connection
 from PyPDF2 import PdfReader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import google.generativeai as palm
@@ -72,9 +72,6 @@ def submit():
     st.session_state.widget = ""
 
 def user_input(user_question):
-    print("In user_input")
-    # why the input is taking two values 
-    print(user_question)
     response = st.session_state.conversation({'question': user_question})
     st.session_state.chatHistory = response['chat_history']
     chat_history_length = len(st.session_state.chatHistory)
@@ -93,12 +90,13 @@ def main():
         #     layout="wide",
         # )
         st.header("DocPlay 💬")
-        users = [
-            {'email': 'user1@example.com', 'username': 'user1', 'password': 'password1'},
-            {'email': 'user2@example.com', 'username': 'user2', 'password': 'password2'},
-            {'email': 'user3@example.com', 'username': 'user3', 'password': 'password3'},
-            # Add more users as needed
-        ]
+        users = fetch_users()
+        # users = [
+        #     {'email': 'user1@example.com', 'username': 'user1', 'password': 'password1'},
+        #     {'email': 'user2@example.com', 'username': 'user2', 'password': 'password2'},
+        #     {'email': 'user3@example.com', 'username': 'user3', 'password': 'password3'},
+        #     # Add more users as needed
+        # ]
         emails = []
         usernames = []
         passwords = []
@@ -113,13 +111,14 @@ def main():
             credentials['usernames'][usernames[index]] = {'name': emails[index], 'password': passwords[index]}
         
         Authenticator = stauth.Authenticate(credentials, cookie_name='Streamlit', cookie_key='jwtsecretkey', cookie_expiry_days=4)
-        # email, authentication_status, username = Authenticator.login(':green[Login]', 'main')
+        # _, authentication_status, username = Authenticator.login(':green[Login]', 'main')
         _, authentication_status, username = Authenticator.login()
 
         info, _ = st.columns(2)
 
         ##check sign up
         if not authentication_status:
+            # connection()
             sign_up()
 
         if username:
