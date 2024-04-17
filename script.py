@@ -7,7 +7,7 @@ from PyPDF2 import PdfReader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import google.generativeai as palm
 from langchain.embeddings import GooglePalmEmbeddings
-from langchain.llms import GooglePalm
+from langchain.llms.google_palm import GooglePalm
 from langchain.vectorstores import FAISS
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
@@ -72,6 +72,9 @@ def submit():
     st.session_state.widget = ""
 
 def user_input(user_question):
+    print("In user_input")
+    # why the input is taking two values 
+    print(user_question)
     response = st.session_state.conversation({'question': user_question})
     st.session_state.chatHistory = response['chat_history']
     chat_history_length = len(st.session_state.chatHistory)
@@ -85,15 +88,23 @@ def user_input(user_question):
 
 def main():
     try:
-        st.set_page_config("DocPlay 💬")
+        # st.set_page_config(
+        #     page_title="DocPlay 💬",
+        #     layout="wide",
+        # )
         st.header("DocPlay 💬")
-        users = fetch_users()
+        users = [
+            {'email': 'user1@example.com', 'username': 'user1', 'password': 'password1'},
+            {'email': 'user2@example.com', 'username': 'user2', 'password': 'password2'},
+            {'email': 'user3@example.com', 'username': 'user3', 'password': 'password3'},
+            # Add more users as needed
+        ]
         emails = []
         usernames = []
         passwords = []
     
         for user in users:
-            emails.append(user['key'])
+            emails.append(user['email'])
             usernames.append(user['username'])
             passwords.append(user['password'])
         
@@ -101,10 +112,11 @@ def main():
         for index in range(len(emails)):
             credentials['usernames'][usernames[index]] = {'name': emails[index], 'password': passwords[index]}
         
-        Authenticator = stauth.Authenticate(credentials, cookie_name='Streamlit', key='abcdef', cookie_expiry_days=4)
-        email, authentication_status, username = Authenticator.login(':green[Login]', 'main')
+        Authenticator = stauth.Authenticate(credentials, cookie_name='Streamlit', cookie_key='jwtsecretkey', cookie_expiry_days=4)
+        # email, authentication_status, username = Authenticator.login(':green[Login]', 'main')
+        _, authentication_status, username = Authenticator.login()
 
-        info, info1 = st.columns(2)
+        info, _ = st.columns(2)
 
         ##check sign up
         if not authentication_status:
@@ -116,10 +128,9 @@ def main():
                     #let user see the app
                     st.write(css, unsafe_allow_html=True)
 
-                    # st.header("Chat with Multiple PDF 💬")
                     st.text_input("Ask a Question from the PDF Files", key="widget", on_change=submit)
                     if "user_question" not in st.session_state:
-                        st.session_state.user_question = ""
+                        st.session_state.user_question = None
                     user_question = st.session_state.user_question
                     if "conversation" not in st.session_state:
                         st.session_state.conversation = None
@@ -129,6 +140,8 @@ def main():
                         st.session_state.clear_history_pressed = False
                     if user_question:
                         user_input(user_question)
+                    
+
                     with st.sidebar:
                         st.title(f'Welcome {username}')
                         st.subheader("Upload your Documents")
@@ -173,11 +186,12 @@ def main():
             else:
                 with info:
                     st.warning("Username does not exist, Please Sign up")
-
     
-    except:
-        st.success('Refresh Page')
-
+    except Exception as e:  # Catch any type of exception
+        print(e)
+        st.error(f'Error {e}')
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     data_file = "data.obj"

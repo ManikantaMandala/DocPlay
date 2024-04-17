@@ -7,7 +7,7 @@ from deta import Deta
 from dotenv import dotenv_values
 config = dotenv_values(".env")
 
-deta = Deta(config['DETA_KEY'])
+deta = Deta(config['DETA_PROJECT_KEY'])
 
 db = deta.Base('StreamlitAuth')
 
@@ -82,7 +82,7 @@ def validate_username(username):
     return False
 
 def sign_up():
-    with st.form(key='signup', clear_on_submit=True):
+    with st.form(key='signUpForProject', clear_on_submit=True):
         st.subheader('Sign Up')
         email = st.text_input(':blue[Email]', placeholder='Enter Your Email')
         username = st.text_input(':blue[Username]', placeholder='Enter Your Username')
@@ -100,7 +100,7 @@ def sign_up():
                                         
                                         #Adding the user
                                         hashed_password = stauth.Hasher([password2]).generate()
-                                        insert_user(email,username, hashed_password[0])
+                                        print(insert_user(email,username, hashed_password[0]))
                                         st.success('Account has been created Successfully!!')
                                         st.balloons()
                                     else:
